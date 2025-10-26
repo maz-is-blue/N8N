@@ -1,0 +1,403 @@
+openapi: 3.0.0
+info:
+  title: Workflow Builder API
+  description: API for building and executing workflows with MCP adapters
+  version: 1.0.0
+servers:
+  - url: http://localhost:3001/api
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        role:
+          type: string
+    
+    Workflow:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        json:
+          type: object
+        version:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    
+    WorkflowRun:
+      type: object
+      properties:
+        id:
+          type: integer
+        workflow_id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        trigger_data:
+          type: object
+        result:
+          type: object
+        error:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+    
+    Credential:
+      type: object
+      properties:
+        id:
+          type: integer
+        provider:
+          type: string
+        name:
+          type: string
+        scopes:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+        '400':
+          description: Validation error
+  
+  /auth/login:
+    post:
+      summary: Login user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+        '401':
+          description: Invalid credentials
+  
+  /workflows:
+    get:
+      summary: Get all workflows
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of workflows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workflow'
+    
+    post:
+      summary: Create a new workflow
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, json]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                json:
+                  type: object
+      responses:
+        '201':
+          description: Workflow created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflow:
+                    $ref: '#/components/schemas/Workflow'
+  
+  /workflows/{id}:
+    get:
+      summary: Get workflow by ID
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Workflow details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflow:
+                    $ref: '#/components/schemas/Workflow'
+        '404':
+          description: Workflow not found
+    
+    put:
+      summary: Update workflow
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                json:
+                  type: object
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Workflow updated
+    
+    delete:
+      summary: Delete workflow
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Workflow deleted
+  
+  /executions/workflows/{id}/execute:
+    post:
+      summary: Execute a workflow
+      tags: [Executions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                triggerData:
+                  type: object
+      responses:
+        '200':
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runId:
+                    type: integer
+                  status:
+                    type: string
+                  result:
+                    type: object
+  
+  /executions/workflows/{id}/runs:
+    get:
+      summary: Get workflow runs
+      tags: [Executions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowRun'
+  
+  /executions/runs/{id}:
+    get:
+      summary: Get run details with steps
+      tags: [Executions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Run details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    $ref: '#/components/schemas/WorkflowRun'
+                  steps:
+                    type: array
+                  toolExecutions:
+                    type: array
+  
+  /credentials:
+    get:
+      summary: Get all credentials
+      tags: [Credentials]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credentials:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Credential'
+    
+    post:
+      summary: Create credential
+      tags: [Credentials]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, name, tokens]
+              properties:
+                provider:
+                  type: string
+                name:
+                  type: string
+                tokens:
+                  type: object
+                scopes:
+                  type: string
+                expires_at:
+                  type: string
+      responses:
+        '201':
+          description: Credential created
